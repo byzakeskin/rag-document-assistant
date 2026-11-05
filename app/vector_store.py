@@ -28,13 +28,14 @@ def add_chunks(chunks: list[dict], source: str) -> int:
     return len(chunks)
 
 
-def search(query: str, top_k: int = 3) -> list[dict]:
-    """Soruya en yakın chunk'ları döndürür."""
+def search(query: str, top_k: int = 3, source: str | None = None) -> list[dict]:
+    """Soruya en yakın chunk'ları döndürür. source verilirse sadece o dosyada arar."""
     query_embedding = embed_texts([query])[0]
 
     results = _collection.query(
         query_embeddings=[query_embedding],
         n_results=top_k,
+        where={"source": source} if source else None,
     )
 
     hits = []
@@ -47,9 +48,17 @@ def search(query: str, top_k: int = 3) -> list[dict]:
             "text": text,
             "page": metadata["page"],
             "source": metadata["source"],
-            "score": round(1 - distance, 3),  # cosine mesafesini benzerliğe çevir
+            "score": round(1 - distance, 3),
         })
     return hits
+
+def list_sources() -> list[dict]:
+    """Veritabanındaki belgeleri ve chunk sayılarını listeler."""
+    data = _collection.get(include=["metadatas"])
+    counts: dict[str, int] = {}
+    for metadata in data["metadatas"]:
+        counts[metadata["source"]] = counts.get(metadata["source"], 0) + 1
+    return [{"source": s, "chunks": c} for s, c in counts.items()]
 
 def delete_source(source: str) -> None:
     """Bir dosyaya ait tüm chunk'ları siler (aynı dosya tekrar yüklenirse kalıntı kalmasın)."""

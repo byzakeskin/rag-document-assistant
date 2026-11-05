@@ -23,7 +23,9 @@ CEVAP:"""
 
 def generate_answer(question: str, hits: list[dict]) -> str:
     """Bulunan chunk'ları bağlam olarak verip LLM'den cevap üretir."""
-    context = "\n\n".join(f"[Sayfa {h['page']}]\n{h['text']}" for h in hits)
+    context = "\n\n".join(
+        f"[{h['source']}, Sayfa {h['page']}]\n{h['text']}" for h in hits
+    )
     prompt = PROMPT_TEMPLATE.format(context=context, question=question)
 
     response = _client.models.generate_content(model=_model, contents=prompt)
