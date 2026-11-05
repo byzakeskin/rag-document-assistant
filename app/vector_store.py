@@ -50,3 +50,7 @@ def search(query: str, top_k: int = 3) -> list[dict]:
             "score": round(1 - distance, 3),  # cosine mesafesini benzerliğe çevir
         })
     return hits
+
+def delete_source(source: str) -> None:
+    """Bir dosyaya ait tüm chunk'ları siler (aynı dosya tekrar yüklenirse kalıntı kalmasın)."""
+    _collection.delete(where={"source": source})
