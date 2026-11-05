@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from app.chunker import chunk_text
 from app.llm import generate_answer
 from app.pdf_processor import extract_text_from_pdf
-from app.vector_store import add_chunks, delete_source, search
+from app.vector_store import add_chunks, delete_source, list_sources, search
 
 app = FastAPI(title="AI Document Assistant")
 
@@ -17,6 +17,7 @@ DATA_DIR.mkdir(exist_ok=True)
 class AskRequest(BaseModel):
     question: str
     top_k: int = 5
+    source: str | None = None
 
 
 @app.get("/")
@@ -78,3 +79,23 @@ def ask(request: AskRequest):
         for h in hits
     ]
     return {"answer": answer, "sources": sources}
+
+@app.get("/documents")
+def list_documents():
+    """Yüklenmiş belgeleri listeler."""
+    return {"documents": list_sources()}
+
+
+@app.delete("/documents/{filename}")
+def delete_document(filename: str):
+    """Bir belgeyi veritabanından ve diskten siler."""
+    filename = Path(filename).name
+    if not any(d["source"] == filename for d in list_sources()):
+        raise HTTPException(status_code=404, detail="Belge bulunamadı.")
+
+    delete_source(filename)
+    pdf_path = DATA_DIR / filename
+    if pdf_path.exists():
+        pdf_path.unlink()
+
+    return {"deleted": filename}    
