@@ -1,7 +1,7 @@
 def chunk_text(
     pages: list[dict],
-    chunk_size: int = 500,
-    chunk_overlap: int = 100,
+    chunk_size: int = 600,
+    chunk_overlap: int = 200,
 ) -> list[dict]:
     """Sayfa metinlerini satır sınırlarına göre örtüşmeli parçalara böler.
     Kelimeler ve satırlar ortadan kesilmez."""
