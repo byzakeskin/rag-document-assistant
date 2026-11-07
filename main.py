@@ -8,7 +8,12 @@ from app.llm import generate_answer
 from app.pdf_processor import extract_text_from_pdf
 from app.vector_store import add_chunks, delete_source, list_sources, search
 
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
 app = FastAPI(title="AI Document Assistant")
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 DATA_DIR = Path("data")
 DATA_DIR.mkdir(exist_ok=True)
@@ -22,7 +27,12 @@ class AskRequest(BaseModel):
 
 @app.get("/")
 def home():
-    return {"message": "RAG projesi çalışıyor!"}
+    return FileResponse("static/index.html")
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 
 @app.post("/upload")
@@ -60,7 +70,7 @@ def ask(request: AskRequest):
     if not question:
         raise HTTPException(status_code=400, detail="Soru boş olamaz.")
 
-    hits = search(question, top_k=request.top_k)
+    hits = search(question, top_k=request.top_k, source=request.source)
     if not hits:
         return {"answer": "Henüz yüklenmiş bir belge yok.", "sources": []}
 
