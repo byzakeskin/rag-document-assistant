@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Document Assistant</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; background: #f4f5f7; color: #1f2430; margin: 0; padding: 24px; }
+    .wrap { max-width: 800px; margin: 0 auto; }
+    h1 { margin: 0 0 4px; }
+    .sub { color: #667; margin: 0 0 20px; }
+    .card { background: #fff; border-radius: 10px; padding: 18px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    h2 { margin: 0 0 12px; font-size: 1.05rem; }
+    button { background: #3b5bdb; color: #fff; border: 0; border-radius: 6px; padding: 8px 14px; cursor: pointer; font-size: .95rem; }
+    button:disabled { opacity: .5; cursor: wait; }
+    button.danger { background: #e03131; padding: 4px 10px; font-size: .85rem; }
+    input[type=text], select { padding: 8px; border: 1px solid #ccd; border-radius: 6px; font-size: .95rem; }
+    input[type=text] { width: 100%; margin-bottom: 10px; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .doc { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #eee; }
+    .doc:last-child { border-bottom: 0; }
+    .muted { color: #889; font-size: .9rem; }
+    #answer { white-space: pre-wrap; line-height: 1.5; }
+    .source { border-left: 3px solid #3b5bdb; padding: 6px 10px; margin-top: 8px; background: #f8f9ff; font-size: .88rem; }
+    .error { color: #e03131; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>AI Document Assistant</h1>
+  <p class="sub">PDF yükle, belgelerine soru sor.</p>
+
+  <div class="card">
+    <h2>1. Belge yükle</h2>
+    <div class="row">
+      <input type="file" id="file" accept=".pdf">
+      <button id="uploadBtn" onclick="upload()">Yükle</button>
+      <span id="uploadMsg" class="muted"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Belgelerim</h2>
+    <div id="docs" class="muted">Yükleniyor...</div>
+  </div>
+
+  <div class="card">
+    <h2>2. Soru sor</h2>
+    <input type="text" id="question" placeholder="Sorunu yaz ve Enter'a bas..." onkeydown="if(event.key==='Enter') ask()">
+    <div class="row">
+      <select id="sourceSelect"><option value="">Tüm belgeler</option></select>
+      <button id="askBtn" onclick="ask()">Sor</button>
+    </div>
+  </div>
+
+  <div class="card" id="resultCard" style="display:none">
+    <h2>Cevap</h2>
+    <div id="answer"></div>
+    <h2 style="margin-top:16px">Kaynaklar</h2>
+    <div id="sources"></div>
+  </div>
+</div>
+
+<script>
+  async function loadDocs() {
+    const res = await fetch("/documents");
+    const data = await res.json();
+    const box = document.getElementById("docs");
+    const select = document.getElementById("sourceSelect");
+    const selected = select.value;
+
+    box.innerHTML = "";
+    select.innerHTML = '<option value="">Tüm belgeler</option>';
+
+    if (data.documents.length === 0) {
+      box.textContent = "Henüz belge yok.";
+      return;
+    }
+
+    data.documents.forEach(d => {
+      const row = document.createElement("div");
+      row.className = "doc";
+      const label = document.createElement("span");
+      label.textContent = `${d.source} (${d.chunks} parça)`;
+      const del = document.createElement("button");
+      del.className = "danger";
+      del.textContent = "Sil";
+      del.onclick = () => removeDoc(d.source);
+      row.append(label, del);
+      box.appendChild(row);
+
+      const opt = document.createElement("option");
+      opt.value = d.source;
+      opt.textContent = d.source;
+      select.appendChild(opt);
+    });
+    select.value = selected;
+  }
+
+  async function upload() {
+    const file = document.getElementById("file").files[0];
+    const msg = document.getElementById("uploadMsg");
+    const btn = document.getElementById("uploadBtn");
+    if (!file) { msg.textContent = "Önce bir PDF seç."; return; }
+
+    btn.disabled = true;
+    msg.className = "muted";
+    msg.textContent = "İşleniyor...";
+    const form = new FormData();
+    form.append("file", file);
+
+    try {
+      const res = await fetch("/upload", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Yükleme başarısız");
+      msg.textContent = `Hazır: ${data.pages} sayfa, ${data.chunks} parça`;
+      loadDocs();
+    } catch (e) {
+      msg.className = "error";
+      msg.textContent = e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function removeDoc(name) {
+    if (!confirm(`${name} silinsin mi?`)) return;
+    await fetch(`/documents/${encodeURIComponent(name)}`, { method: "DELETE" });
+    loadDocs();
+  }
+
+  async function ask() {
+    const question = document.getElementById("question").value.trim();
+    const source = document.getElementById("sourceSelect").value;
+    const btn = document.getElementById("askBtn");
+    if (!question) return;
+
+    const card = document.getElementById("resultCard");
+    const answer = document.getElementById("answer");
+    const sources = document.getElementById("sources");
+    card.style.display = "block";
+    answer.className = "";
+    answer.textContent = "Düşünüyor...";
+    sources.innerHTML = "";
+    btn.disabled = true;
+
+    try {
+      const res = await fetch("/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, source: source || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Hata oluştu");
+
+      answer.textContent = data.answer;
+      data.sources.forEach(s => {
+        const div = document.createElement("div");
+        div.className = "source";
+        div.textContent = `${s.source}, sayfa ${s.page} (skor ${s.score}): ${s.preview}...`;
+        sources.appendChild(div);
+      });
+    } catch (e) {
+      answer.className = "error";
+      answer.textContent = e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  loadDocs();
+</script>
+</body>
+</html>
