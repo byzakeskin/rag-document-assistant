@@ -1,7 +1,8 @@
 from sentence_transformers import SentenceTransformer
 
-# Model bir kez yüklenir, her seferinde tekrar yüklenmez
-_model = SentenceTransformer("all-MiniLM-L6-v2")
+# Çok dilli model: Türkçe soru ile İngilizce belge arasında da eşleştirme yapabilir
+_model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
+_model.max_seq_length = 256  
 
 
 def embed_texts(texts: list[str]) -> list[list[float]]:
